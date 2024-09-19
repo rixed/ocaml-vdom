@@ -160,6 +160,8 @@ type key_event = {which: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
 
 type paste_event = {text: string; selection_start: int; selection_end: int}
 
+type wheel_event = {delta_x: float; delta_y: float; delta_z: float; delta_mode: int}
+
 type 'msg msg_options = {msg: 'msg option; stop_propagation: bool; prevent_default: bool}
 
 type +'msg event_handler =
@@ -218,6 +220,7 @@ val onkeydown_cancel: ?stop_propagation:unit -> (key_event -> 'msg option) -> 'm
 val onkeyup: ?prevent_default:unit -> ?stop_propagation:unit -> (key_event -> 'msg) -> 'msg attribute
 val onkeyup_cancel: ?stop_propagation:unit -> (key_event -> 'msg option) -> 'msg attribute
 val onpaste: ?prevent_default:unit -> ?stop_propagation:unit -> (paste_event -> 'msg option) -> 'msg attribute
+val onwheel: ?prevent_default:unit -> ?stop_propagation:unit -> (wheel_event -> 'msg) -> 'msg attribute
 val oncustomevent: (Custom.event -> 'msg option) -> 'msg attribute
 
 

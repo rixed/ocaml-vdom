@@ -29,6 +29,8 @@ type key_event = {which: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
 
 type paste_event = {text: string; selection_start: int; selection_end: int}
 
+type wheel_event = {delta_x: float; delta_y: float; delta_z: float; delta_mode: int}
+
 type js_object = .. (* forward declaration in Vdom_blit, to avoid depending to DOM API here *)
 
 module Decoder = struct
@@ -152,6 +154,12 @@ module Decoder = struct
     and+ selection_end = field "currentTarget.selectionEnd" int in
     {text; selection_start; selection_end}
 
+  let wheel_event =
+    let+ delta_x = field "deltaX" float
+    and+ delta_y = field "deltaY" float
+    and+ delta_z = field "deltaZ" float
+    and+ delta_mode = field "deltaMode" int in
+    {delta_x; delta_y; delta_z; delta_mode}
 end
 
 type 'msg msg_options = {msg: 'msg option; stop_propagation: bool; prevent_default: bool}
@@ -248,6 +256,8 @@ let onkeyup ?prevent_default ?stop_propagation msg = onkeyevent ?prevent_default
 let onkeyup_cancel ?stop_propagation msg = onkeyevent_cancel ?stop_propagation "keyup" msg
 
 let onpaste ?prevent_default ?stop_propagation msg = on ?prevent_default ?stop_propagation "paste" (Decoder.map msg Decoder.paste_event)
+
+let onwheel ?prevent_default ?stop_propagation msg = on ?prevent_default ?stop_propagation "wheel" (Decoder.map_some msg Decoder.wheel_event)
 
 let oncustomevent msg = Handler (CustomEvent msg)
 
