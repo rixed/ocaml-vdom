@@ -172,6 +172,8 @@ type prop_val =
   | Float of float
   | Bool of bool
 
+type eff_when = Add | Del
+
 type 'msg attribute =
   | Property of string * prop_val
   | Style of string * string
@@ -179,6 +181,7 @@ type 'msg attribute =
   | Attribute of string * string (* use a prop_val to avoid
                                     casting number to strings
                                     when producing the vdom? *)
+  | Effect of eff_when * (string -> unit) (* Call a function with the element id. *)
 
 
 (** {3 Event handlers} *)
@@ -283,6 +286,9 @@ val select: 'msg attribute
 val autosubmit: 'msg attribute
 (** When this pseudo_attribute is first applied to a form element,
     it will be submitted automatically. *)
+
+val onshow: (string -> unit) -> 'msg attribute
+val finalize: (string -> unit) -> 'msg attribute
 
 
 (** {2 VDOM} *)
