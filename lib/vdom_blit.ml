@@ -507,7 +507,7 @@ let apply_attributes ctx ns dom attributes =
     ([], []) attributes
 
 let call_all id lst =
-  async (fun () -> List.iter (fun f -> f id) lst)
+  List.iter (fun f -> f id) lst
 
 let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
   fun ~parent ctx vdom ->
@@ -543,7 +543,7 @@ let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
         |> Option.value ~default:""
       in
       let constructors, finalizers = apply_attributes ctx ns elt.dom attributes in
-      call_all (Element.id elt.dom) constructors ;
+      ctx.after_redraw (fun () -> call_all (Element.id elt.dom) constructors) ;
       BCustom {vdom; elt; ns; propagate_events; finalizers}
 
   | Element {ns; tag; children; attributes; key = _} ->
@@ -555,7 +555,7 @@ let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
       let children = List.map (blit ~parent:dom ctx) children in
       List.iter (fun c -> List.iter (Element.append_child dom) (get_doms c)) children;
       let constructors, finalizers = apply_attributes ctx ns dom attributes in
-      call_all (Element.id dom) constructors ;
+      ctx.after_redraw (fun () -> call_all (Element.id dom) constructors) ;
       BElement {vdom; dom; children; finalizers}
 
 let blit ~parent ctx vdom =
