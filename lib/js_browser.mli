@@ -947,6 +947,8 @@ module Console : sig
   type t
 
   val log: t -> Ojs.t -> unit [@@js.call]
+  val warn: t -> Ojs.t -> unit [@@js.call]
+  val error: t -> Ojs.t -> unit [@@js.call]
   val time: t -> string -> unit [@@js.call]
   val time_end: t -> string -> unit [@@js.call "timeEnd"]
 end
