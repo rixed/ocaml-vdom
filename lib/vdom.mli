@@ -154,7 +154,7 @@ end
 
 (** {2 Properties and event handlers} *)
 
-type mouse_event = {x: float; y: float; page_x: float; page_y: float; element_x: float Lazy.t; element_y: float Lazy.t; buttons: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
+type mouse_event = {x: float; y: float; page_x: float; page_y: float; element_x: float Lazy.t; element_y: float Lazy.t; element_w: float Lazy.t; element_h: float Lazy.t; buttons: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
 
 type key_event = {which: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
 

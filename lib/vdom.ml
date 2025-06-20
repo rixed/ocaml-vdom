@@ -23,7 +23,7 @@ module Custom = struct
   type event = ..
 end
 
-type mouse_event = {x: float; y: float; page_x: float; page_y: float; element_x: float Lazy.t; element_y: float Lazy.t; buttons: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
+type mouse_event = {x: float; y: float; page_x: float; page_y: float; element_x: float Lazy.t; element_y: float Lazy.t; element_w: float Lazy.t; element_h: float Lazy.t; buttons: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
 
 type key_event = {which: int; alt_key: bool; ctrl_key: bool; shift_key: bool}
 
@@ -103,12 +103,14 @@ module Decoder = struct
   let mouse_event =
     let+ x = field "clientX" float
     and+ y = field "clientY" float
-    and+ left_top = factor (fun () ->
+    and+ rect = factor (fun () ->
         field "currentTarget" @@
         method_ "getBoundingClientRect" [] @@
         let+ left = field "left" float
-        and+ top = field "top" float in
-        (left, top))
+        and+ top = field "top" float
+        and+ width = field "width" float
+        and+ height = field "height" float in
+        (left, top, width, height))
     and+ page_x = field "pageX" float
     and+ page_y = field "pageY" float
     and+ buttons = field "buttons" int
@@ -116,14 +118,16 @@ module Decoder = struct
     and+ ctrl_key = field "ctrlKey" bool
     and+ shift_key = field "shiftKey" bool
     in
-    let left_top = Lazy.from_fun left_top in
+    let rect = Lazy.from_fun rect in
     let get x =
       match Lazy.force x with
       | Ok x -> x
       | Error err -> failwith err
     in
-    let element_x = lazy (x -. fst (get left_top)) in
-    let element_y = lazy (y -. snd (get left_top)) in
+    let element_x = lazy (x -. (let x, _, _, _ = get rect in x)) in
+    let element_y = lazy (y -. (let _, x, _, _ = get rect in x)) in
+    let element_w = lazy (let _, _, x, _ = get rect in x) in
+    let element_h = lazy (let _, _, _, x = get rect in x) in
     {
       x;
       y;
@@ -131,6 +135,8 @@ module Decoder = struct
       page_y;
       element_x;
       element_y;
+      element_w;
+      element_h;
       buttons;
       alt_key;
       ctrl_key;
