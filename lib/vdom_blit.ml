@@ -529,12 +529,7 @@ let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
 
   | Custom {elt; attributes; key = _; propagate_events} ->
       let elt =
-        try Custom.lookup ~parent ~process_custom:ctx.process_custom ~after_redraw:ctx.after_redraw elt (ctx.custom_handlers @ (!global).customs);
-        with exn ->
-          Printf.printf "Error during vdom Custom %s lookup: %s\n%!"
-            (Obj.Extension_constructor.name (Obj.Extension_constructor.of_val elt))
-            (Printexc.to_string exn);
-          raise exn
+        Custom.lookup ~parent ~process_custom:ctx.process_custom ~after_redraw:ctx.after_redraw elt (ctx.custom_handlers @ (!global).customs)
       in
       let ns =
         Ojs.option_of_js
@@ -557,12 +552,6 @@ let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
       let constructors, finalizers = apply_attributes ctx ns dom attributes in
       ctx.after_redraw (fun () -> call_all (Element.id dom) constructors) ;
       BElement {vdom; dom; children; finalizers}
-
-let blit ~parent ctx vdom =
-  try blit ~parent ctx vdom
-  with exn ->
-    Printf.printf "Error during vdom blit: %s\n%!" (Printexc.to_string exn);
-    raise exn
 
 let sync_props to_string same set clear l1 l2 =
   let sort = List.sort (fun (k1, _) (k2, _) -> String.compare k1 k2) in
@@ -861,12 +850,6 @@ and sync_children : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg c
   done;
   !ctrls
 
-let sync ctx parent old vdom =
-  try sync ctx parent old vdom
-  with exn ->
-    Printf.printf "Error during vdom sync: %s\n%!" (Printexc.to_string exn);
-    raise exn
-
 type 'msg find =
   | NotFound
   | Found: {mapper: ('inner_msg -> 'msg); inner: 'inner_msg ctrl; parent: 'msg find} -> 'msg find
@@ -947,75 +930,65 @@ let run (type msg model) ?(env = empty) ?container
 
   let pending_redraw = ref false in
 
-  let view model =
-    try view model
-    with exn ->
-      Printf.printf "Error during vdom view: %s\n%!" (Printexc.to_string exn);
-      raise exn
-  in
-
   let on_event evt =
     let ty = Event.type_ evt in
-    try
-      let tgt = Element.t_of_js (Event.target evt) in
-      let apply_handler dom mapper = function
-        | Handler (Decoder {event_type; decoder; map}) when ty = event_type ->
-            let {msg; prevent_default; stop_propagation} =
-              BDecoder.decode_fail
-                ~extra_fields:["currentTarget", Element.t_to_js dom]
-                decoder
-                (Event.t_to_js evt)
-            in
-            if prevent_default then Event.prevent_default evt;
-            if stop_propagation then Event.stop_propagation evt;
-            Option.iter (fun msg -> !process_fwd (mapper msg)) (map msg);
-            stop_propagation
-        | _ -> false
-      in
-      let rec propagate = function
-        | Found {
-            mapper;
-            inner = ( BElement {vdom = Element {attributes; _}; dom; _}
-                    | BCustom  {vdom = Custom  {attributes; _}; elt = {dom; _}; _} );
-            parent;
-          } ->
-            let stop_propagation =
-              List.fold_left (fun stopped_propagation attribute ->
-                  let stop_propagation = apply_handler dom mapper attribute in
-                  stopped_propagation || stop_propagation
-                ) false attributes
-            in
-            if not stop_propagation then propagate parent
-        | _ ->
-            ()
-      in
-      Option.iter (fun root ->
-          propagate (vdom_of_dom root tgt);
-        ) !current;
+    let tgt = Element.t_of_js (Event.target evt) in
+    let apply_handler dom mapper = function
+      | Handler (Decoder {event_type; decoder; map}) when ty = event_type ->
+          let {msg; prevent_default; stop_propagation} =
+            BDecoder.decode_fail
+              ~extra_fields:["currentTarget", Element.t_to_js dom]
+              decoder
+              (Event.t_to_js evt)
+          in
+          if prevent_default then Event.prevent_default evt;
+          if stop_propagation then Event.stop_propagation evt;
+          Option.iter (fun msg -> !process_fwd (mapper msg)) (map msg);
+          stop_propagation
+      | _ -> false
+    in
+    let rec propagate = function
+      | Found {
+          mapper;
+          inner = ( BElement {vdom = Element {attributes; _}; dom; _}
+                  | BCustom  {vdom = Custom  {attributes; _}; elt = {dom; _}; _} );
+          parent;
+        } ->
+          let stop_propagation =
+            List.fold_left (fun stopped_propagation attribute ->
+                let stop_propagation = apply_handler dom mapper attribute in
+                stopped_propagation || stop_propagation
+              ) false attributes
+          in
+          if not stop_propagation then propagate parent
+      | _ ->
+          ()
+    in
+    Option.iter (fun root ->
+        propagate (vdom_of_dom root tgt);
+      ) !current;
 
-      if ty = "input" || ty = "blur" then
-        let f () =
-          Option.iter
-            (fun root ->
-               match vdom_of_dom root tgt with
-               (* note: the new vdom can be different after processing
-                  the event above *)
-               (* !! This is probably broken now that we delay updating the vdom
-                     with request_animation_frame !! *)
-               | Found {mapper = _; inner = BElement {vdom = Element {attributes; _}; _}; _} ->
-                   List.iter
-                     (function
-                       | Property ("value", String s2) when s2 <> Element.value tgt -> Element.set_value tgt s2
-                       | Property ("checked", Bool s2) -> Element.set_checked tgt s2
-                       | _ -> ()
-                     )
-                     attributes
-               | _ -> ()
-            ) !current
-        in
-        if !pending_redraw then after_redraw f else f ()
-    with exn ->
-      Printf.printf "Error in event handler %S: %s\n%!" ty (Printexc.to_string exn)
+    if ty = "input" || ty = "blur" then
+      let f () =
+        Option.iter
+          (fun root ->
+             match vdom_of_dom root tgt with
+             (* note: the new vdom can be different after processing
+                the event above *)
+             (* !! This is probably broken now that we delay updating the vdom
+                   with request_animation_frame !! *)
+             | Found {mapper = _; inner = BElement {vdom = Element {attributes; _}; _}; _} ->
+                 List.iter
+                   (function
+                     | Property ("value", String s2) when s2 <> Element.value tgt -> Element.set_value tgt s2
+                     | Property ("checked", Bool s2) -> Element.set_checked tgt s2
+                     | _ -> ()
+                   )
+                   attributes
+             | _ -> ()
+          ) !current
+      in
+      if !pending_redraw then after_redraw f else f ()
   in
 
   let add_listener event_type =
@@ -1054,17 +1027,13 @@ let run (type msg model) ?(env = empty) ?container
   in
 
   let rec process msg =
-    try
-      let (new_model : model), (cmd : msg Vdom.Cmd.t) = update !model msg in
-      model := new_model;
-      run_cmd container cmd;
-      if not !pending_redraw then begin
-        pending_redraw := true;
-        Window.request_animation_frame window redraw
-      end
-    with exn ->
-      Printf.printf "Error during vdom process: %s\n%!" (Printexc.to_string exn);
-      raise exn
+    let (new_model : model), (cmd : msg Vdom.Cmd.t) = update !model msg in
+    model := new_model;
+    run_cmd container cmd;
+    if not !pending_redraw then begin
+      pending_redraw := true;
+      Window.request_animation_frame window redraw
+    end
   and run_cmd (parent : Js_browser.Element.t) cmd =
     Cmd.run after_redraw (env.cmds @ (!global).cmds) process parent cmd
   in
