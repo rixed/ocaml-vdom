@@ -78,15 +78,15 @@ module BDecoder = struct
     Result.bind (aux o keys) d
 
   let method_ name arg d o =
+    let arg = Array.of_list arg in
     let arg =
-      List.map (function
+      Array.map (function
           | Decoder.StringArg s -> Ojs.string_to_js s
           | BoolArg b -> Ojs.bool_to_js b
           | FloatArg f -> Ojs.float_to_js f
           | IntArg i -> Ojs.int_to_js i
         ) arg
     in
-    let arg = Array.of_list arg in
     try
       let obj = Ojs.call o.obj name arg in
       d {path = (Key name :: o.path); obj}
@@ -217,7 +217,7 @@ module Encoder = struct
     | Float f -> Ojs.float_to_js f
     | Bool b -> Ojs.bool_to_js b
     | List l -> Ojs.list_to_js encode l
-    | Obj l -> Ojs.obj (Array.of_list (List.map (fun (s, e) -> (s, encode e)) l))
+    | Obj l -> Ojs.obj (Array.map (fun (s, e) -> (s, encode e)) (Array.of_list l))
     | Fun f -> Ojs.fun_to_js_args (fun o -> encode (f (Ojs.list_of_js convert_arg o)))
 
 end
