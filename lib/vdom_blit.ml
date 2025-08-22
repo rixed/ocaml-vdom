@@ -313,19 +313,19 @@ end
 
 type 'msg ctrl =
   | BText of {vdom: 'msg vdom; dom: Element.t}
-  | BFragment of {vdom: 'msg vdom; doms: Element.t list; children: 'msg ctrl list}
-  | BElement of {vdom: 'msg vdom; dom: Element.t; children: 'msg ctrl list; finalizers: (string -> unit) list}
-  | BMap: {vdom: 'msg vdom; doms: Element.t list; f: ('submsg -> 'msg); child: 'submsg ctrl} -> 'msg ctrl
-  | BMemo: {vdom: 'msg vdom; doms: Element.t list; child: 'msg ctrl} -> 'msg ctrl
+  | BFragment of {vdom: 'msg vdom; doms: Element.t array; children: 'msg ctrl array}
+  | BElement of {vdom: 'msg vdom; dom: Element.t; children: 'msg ctrl array; finalizers: (string -> unit) list}
+  | BMap: {vdom: 'msg vdom; doms: Element.t array; f: ('submsg -> 'msg); child: 'submsg ctrl} -> 'msg ctrl
+  | BMemo: {vdom: 'msg vdom; doms: Element.t array; child: 'msg ctrl} -> 'msg ctrl
   | BCustom of {vdom: 'msg vdom; elt: Custom.t; ns: string; propagate_events: bool; finalizers: (string -> unit) list}
 
 let get_doms = function
-  | BText x -> [x.dom]
+  | BText x -> [|x.dom|]
   | BFragment x -> x.doms
-  | BElement x -> [x.dom]
+  | BElement x -> [|x.dom|]
   | BMap x -> x.doms
   | BMemo x -> x.doms
-  | BCustom x -> [x.elt.dom]
+  | BCustom x -> [|x.elt.dom|]
 
 let get_vdom = function
   | BText x -> x.vdom
@@ -516,8 +516,9 @@ let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
       BText {vdom; dom = Document.create_text_node document txt}
 
   | Fragment {children; key = _} ->
-      let children = List.map (blit ~parent ctx) children in
-      let doms = List.concat_map get_doms children in
+      let children = Array.map (blit ~parent ctx) (Array.of_list children) in
+      let doms = Array.fold_right (fun c doms -> get_doms c :: doms) children [] in
+      let doms = Array.concat doms in
       BFragment {vdom; doms; children }
 
   | Map {f; child; key = _} ->
@@ -547,8 +548,8 @@ let rec blit : 'msg. parent:_ -> ctx -> 'msg vdom -> 'msg ctrl =
         if ns = "" then Document.create_element document tag
         else Document.create_element_ns document ns tag
       in
-      let children = List.map (blit ~parent:dom ctx) children in
-      List.iter (fun c -> List.iter (Element.append_child dom) (get_doms c)) children;
+      let children = Array.map (blit ~parent:dom ctx) (Array.of_list children) in
+      Array.iter (fun c -> Array.iter (Element.append_child dom) (get_doms c)) children;
       let constructors, finalizers = apply_attributes ctx ns dom attributes in
       ctx.after_redraw (fun () -> call_all (Element.id dom) constructors) ;
       BElement {vdom; dom; children; finalizers}
@@ -668,8 +669,8 @@ let rec dispose : type msg. msg ctrl -> unit = fun ctrl ->
   match ctrl with
   | BText _ -> ()
   | BCustom {elt; finalizers; _} -> call_all "" finalizers; elt.dispose ()
-  | BFragment {children; _} -> List.iter dispose children
-  | BElement {children; finalizers; dom; _} -> List.iter dispose children; call_all (Element.id dom) finalizers
+  | BFragment {children; _} -> Array.iter dispose children
+  | BElement {children; finalizers; dom; _} -> Array.iter dispose children; call_all (Element.id dom) finalizers
   | BMap {child; _} -> dispose child
   | BMemo {child; _} -> dispose child
 
@@ -725,33 +726,38 @@ let rec sync : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg ctrl -
       BCustom {vdom; elt; ns; propagate_events; finalizers}
 
   | BFragment {vdom = Fragment e1; children; _}, Fragment e2 when e1.key = e2.key ->
-      let children = sync_children ctx parent next children e2.children in
-      let doms = List.concat_map get_doms children in
+      let children = sync_children ctx parent next children (Array.of_list e2.children) in
+      let doms = Array.fold_right (fun c doms -> get_doms c :: doms) children [] in
+      let doms = Array.concat doms in
       BFragment {vdom; doms; children }
 
   | BElement {vdom = Element e1; dom; children; finalizers}, Element e2 when e1.tag = e2.tag && e1.ns = e2.ns && e1.key = e2.key ->
-      let children = sync_children ctx dom Element.null children e2.children in
+      let children = sync_children ctx dom Element.null children (Array.of_list e2.children) in
       (* synchronize properties & styles *)
       sync_attributes ctx e1.ns dom e1.attributes e2.attributes;
       BElement {vdom; dom; children; finalizers}
 
   | _ ->
       let x = blit ~parent ctx vdom in
-      let rec loop l1 l2 =
-        match l1, l2 with
-        | h1::t1, h2::t2 ->
-            replace_child parent h1 h2;
-            loop t1 t2
-        | [], l ->
-            List.iter (remove_child parent) l
-        | l, [] ->
-            List.iter (fun c -> insert_before parent c next) l
+      let l1 = get_doms x
+      and l2 = get_doms old in
+      let iter_from i f a =
+        for j = i to Array.length a - 1 do f a.(j) done in
+      let rec loop i1 i2 =
+        if i2 >= Array.length l2 then
+          iter_from i1 (fun c -> insert_before parent c next) l1
+        else if i1 >= Array.length l1 then
+          iter_from i2 (remove_child parent) l2
+        else (
+          replace_child parent l1.(i1) l2.(i2);
+          loop (i1 + 1) (i2 + 1)
+        )
       in
-      loop (get_doms x) (get_doms old);
+      loop 0 0;
       dispose old;
       x
 
-and sync_children : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg ctrl list -> msg vdom list -> msg ctrl list =
+and sync_children : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg ctrl array -> msg vdom array -> msg ctrl array =
   fun ctx dom next old_children new_children ->
   (* TODO:
      - add a fast-path to deal with prefixes and suffixes of old/new children with identical
@@ -761,9 +767,7 @@ and sync_children : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg c
 
   (* synchronize children *)
 
-  let old_children = Array.of_list old_children in
-  let moved_control = Array.map (fun c -> get_doms c = []) old_children in (* moved_control.(i) <=> all n in get_doms (old_controls.(i)) are not left sibling of next *)
-  let new_children = Array.of_list new_children in
+  let moved_control = Array.map (fun c -> get_doms c = [||]) old_children in (* moved_control.(i) <=> all n in get_doms (old_controls.(i)) are not left sibling of next *)
 
   (* for each key, get a list of indices in old_children *)
   let by_key = Hashtbl.create 8 in
@@ -789,7 +793,7 @@ and sync_children : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg c
     (fun _ i ->
        if debug then Printf.printf "remove %i\n%!" i;
        let to_remove = old_children.(i) in
-       List.iter (remove_child dom) (get_doms to_remove);
+       Array.iter (remove_child dom) (get_doms to_remove);
        dispose to_remove;
        moved_control.(i) <- true;
     )
@@ -838,17 +842,13 @@ and sync_children : type old_msg msg. ctx -> Element.t -> Element.t -> old_msg c
     let doms = get_doms c in
     if idx < 0 || !right_most_index <> idx then begin
       if debug then Printf.printf "really move\n%!";
-      List.iter (fun c_dom ->
-          insert_before dom c_dom !next) doms;
+      Array.iter (fun c_dom -> insert_before dom c_dom !next) doms;
     end;
-    begin match doms with
-    | hd :: _ -> next := hd
-    | _ -> ()
-    end;
+    if doms <> [||] then next := doms.(0);
     ctrls := c :: !ctrls;
     refresh_right_most_index ();
   done;
-  !ctrls
+  Array.of_list !ctrls  (* FIXME: suspect we want a simpler loop here *)
 
 type 'msg find =
   | NotFound
@@ -858,9 +858,9 @@ let rec found: type inner_msg msg. (inner_msg -> msg) -> msg find -> Element.t -
   fun mapper parent dom -> function
     | BElement _ | BText _ | BCustom _ as inner -> Found {mapper; inner; parent}
     | BFragment {children; _} ->
-        begin match List.find (fun c -> List.memq dom (get_doms c)) children with
-        | exception Not_found -> assert false
-        | c -> found mapper parent dom c
+        begin match Array.find_opt (fun c -> Array.memq dom (get_doms c)) children with
+        | None -> assert false
+        | Some c -> found mapper parent dom c
         end
     | BMap {f; child; _} -> found (fun x -> mapper (f x)) parent dom child
     | BMemo {child; _} -> found mapper parent dom child
@@ -873,15 +873,15 @@ let rec vdom_of_dom: type msg. msg ctrl -> Element.t -> msg find = fun root dom 
   (* hack to check dom == null?   Should move that to Ojs. *)
   match Ojs.option_of_js Element.t_of_js (Element.t_to_js dom) with
   | None -> NotFound
-  | Some dom when List.memq dom (get_doms root) ->
+  | Some dom when Array.memq dom (get_doms root) ->
       found Fun.id NotFound dom root
   | Some dom ->
       begin match vdom_of_dom root (Element.parent_node dom) with
       | NotFound -> NotFound
       | Found {mapper; inner = BElement {children; _}; _} as parent ->
-          begin match List.find (fun c -> List.memq dom (get_doms c)) children with
-          | exception Not_found -> NotFound
-          | c -> found mapper parent dom c
+          begin match Array.find_opt (fun c -> Array.memq dom (get_doms c)) children with
+          | None -> NotFound
+          | Some c -> found mapper parent dom c
           end
       | Found {mapper; inner = BCustom {propagate_events; _} as inner; parent} ->
           if propagate_events then
@@ -1041,7 +1041,7 @@ let run (type msg model) ?(env = empty) ?container
   process_fwd := process;
 
 
-  List.iter (Element.append_child container) (get_doms x);
+  Array.iter (Element.append_child container) (get_doms x);
 
   let process_custom tgt event =
     Option.iter
