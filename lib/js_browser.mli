@@ -628,6 +628,8 @@ module Element : sig
   val query_selector_all: t -> string -> t list [@@js.call]
 
   val class_list: t -> ClassList.t [@@js.get]
+
+  val request_fullscreen : t -> unit [@@js.call]
 end
 
 module Range : sig
@@ -674,6 +676,10 @@ module Document: sig
   val query_selector_all: t -> string -> Element.t list [@@js.call]
 
   val remove_all_selection_ranges: t -> unit [@@js.call "getSelection().removeAllRanges"]
+
+  val fullscreen_element : t -> Element.t option [@@js.get]
+  val fullscreen_enabled : t -> bool [@@js.get]
+  val exit_fullscreen : t -> unit [@@js.call]
 end
 
 module History : sig
