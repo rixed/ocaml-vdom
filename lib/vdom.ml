@@ -414,8 +414,15 @@ let replace_char s c x =
       Buffer.contents buf
 
 let to_html vdom =
+  let is_void_element tag =
+    (* Elements that must not be autoclosed.
+     * See https://html.spec.whatwg.org/multipage/syntax.html#void-elements: *)
+    match String.lowercase_ascii tag with
+    | "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input"
+    | "link" | "meta" | "source" | "track" | "wbr" -> true
+    | _ -> false in
   let b = Buffer.create 654 in
-  let rec aux: type a. a vdom -> unit = function
+  let rec aux: type a. string -> a vdom -> unit = fun prev_ns -> function
     | Text {key=_; txt} -> Buffer.add_string b txt
     | Element {key=_; ns; tag; attributes; children} ->
         let concat_tuple s (x1, x2) = x1 ^ s ^ x2 in
@@ -455,7 +462,7 @@ let to_html vdom =
               ("style", styles) :: attrs
         in
         let attrs = List.rev attrs in
-        let attrs = if ns = "" then attrs else ("xmlns", ns) :: attrs in
+        let attrs = if ns = prev_ns then attrs else ("xmlns", ns) :: attrs in
         let attrs =
           List.map (fun (k, v) ->
               Printf.sprintf "%s=\"%s\"" k
@@ -470,21 +477,24 @@ let to_html vdom =
           Buffer.add_string b attrs
         end;
         if children = [] then
-          Buffer.add_string b "/>"
+          if is_void_element tag then
+            Buffer.add_char b '>'
+          else
+            Buffer.add_string b "/>"
         else begin
           Buffer.add_char b '>';
-          List.iter aux children;
+          List.iter (aux ns) children;
           Buffer.add_string b "</";
           Buffer.add_string b tag;
           Buffer.add_char b '>'
         end
     | Fragment {key=_; children} ->
-        List.iter aux children
+        List.iter (aux prev_ns) children
     | Map {key=_; f=_; child} ->
-        aux child
+        aux prev_ns child
     | Memo {key=_; f; arg} ->
-        aux (f arg)
+        aux prev_ns (f arg)
     | Custom _ -> ()
   in
-  aux vdom;
+  aux "" vdom;
   Buffer.contents b
