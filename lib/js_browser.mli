@@ -839,6 +839,7 @@ module XHR: sig
   val set_response_type: t -> string -> unit [@@js.set]
   val override_mime_type: t -> string -> unit [@@js.call]
   val set_with_credentials: t -> bool -> unit (* starting from IE10 *) [@@js.set]
+  val abort: t -> unit [@@js.call]
 
   type ready_state =
     | Unsent [@js 0]
