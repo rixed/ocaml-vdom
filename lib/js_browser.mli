@@ -982,6 +982,31 @@ module ObjectURL : sig
   val revoke: string -> unit [@@js.global "URL.revokeObjectURL"]
 end
 
+module URLSearchParams : sig
+  type t
+  val t_of_js: Ojs.t -> t
+  val t_to_js: t -> Ojs.t
+
+  val create: unit -> t [@@js.new "URLSearchParams"]
+  val from_string: string -> t [@@js.new "URLSearchParams"]
+
+  val size: t -> int [@@js.get]
+  val entries: t -> (string * string) list
+  [@@js.custom
+    val entries_internal: t -> Ojs.t [@@js.call "entries"]
+    val to_list: Ojs.t -> (string * string) list [@@js.global "Array.from"]
+    let entries t = to_list (entries_internal t)
+  ]
+  val append: t -> string -> string -> unit [@@js.call]
+  val delete: t -> string -> unit [@@js.call]
+  val delete_value: t -> string -> string -> unit [@@js.call "delete"]
+  val get: t -> string -> string option [@@js.call]
+  val has: t -> string -> bool [@@js.call]
+  val has_value: t -> string -> string -> bool [@@js.call "has"]
+  val set: t -> string -> string -> unit [@@js.call]
+  val to_string: t -> string [@@js.call]
+end
+
 module Svg : sig
   module Length : sig
     type t
