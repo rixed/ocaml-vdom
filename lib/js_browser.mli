@@ -603,12 +603,39 @@ module Element : sig
   type focus_options = { prevent_scroll: bool }
   val focus_options: t -> focus_options -> unit [@@js.call "focus"]
 
-  type scroll_into_view_options = { behavior : behavior option }
-  and behavior =
+  type behavior =
     | Auto [@js "auto"]
     | Instant [@js "instant"]
     | Smooth [@js "smooth"]
   [@@js.enum]
+  type alignment =
+    | Start [@js "start"]
+    | Center [@js "center"]
+    | End [@js "end"]
+    | Nearest [@js "nearest"]
+  [@@js.enum]
+  type scroll_into_view_options =
+    { behavior : behavior option ;
+      block : alignment option ;
+      inline : alignment option }
+  (* null are not accepted in those fields thus this custom encoder: *)
+  [@@js.custom
+    {
+    of_js = (fun obj ->
+      let get_prop_or_none prop_name of_js =
+        if Ojs.has_property obj prop_name then
+          Some (Ojs.get_prop_ascii obj prop_name |> of_js)
+        else None in
+      { behavior = get_prop_or_none "behavior" behavior_of_js;
+        block = get_prop_or_none "block" alignment_of_js;
+        inline = get_prop_or_none "inline" alignment_of_js });
+    to_js = (fun opt ->
+      let obj = Ojs.empty_obj () in
+      Option.iter (fun x -> Ojs.set_prop_ascii obj "behavior" (behavior_to_js x)) opt.behavior;
+      Option.iter (fun x -> Ojs.set_prop_ascii obj "block" (alignment_to_js x)) opt.block;
+      Option.iter (fun x -> Ojs.set_prop_ascii obj "inline" (alignment_to_js x)) opt.inline;
+      obj)
+  }]
 
   val scroll_into_view_options: t -> scroll_into_view_options -> unit[@@js.call "scrollIntoView"]
 
