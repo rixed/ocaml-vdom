@@ -430,22 +430,23 @@ let set_style dom k v =
       v
 
 let apply_special_prop ns dom k v =
-  match ns, k, v with
-  | "http://www.w3.org/2000/svg", "className", String s ->
-      let class_obj = Ojs.get_prop_ascii (Element.t_to_js dom) "className" in
-      Ojs.set_prop_ascii class_obj "baseVal" (Ojs.string_to_js s);
-      true
-  | _ -> false
+  if ns == Vdom.svg_ns then (
+    match k, v with
+    | "className", String s ->
+        let class_obj = Ojs.get_prop_ascii (Element.t_to_js dom) "className" in
+        Ojs.set_prop_ascii class_obj "baseVal" (Ojs.string_to_js s);
+        true
+    | _ -> false
+  ) else false
 
 let js_empty_string = Ojs.string_to_js ""
 
 let clear_special_prop ns dom k =
-  match ns, k with
-  | "http://www.w3.org/2000/svg", "className" ->
-      let class_obj = Ojs.get_prop_ascii (Element.t_to_js dom) "className" in
-      Ojs.set_prop_ascii class_obj "baseVal" js_empty_string;
-      true
-  | _ -> false
+  if ns == Vdom.svg_ns && k = "className" then (
+    let class_obj = Ojs.get_prop_ascii (Element.t_to_js dom) "className" in
+    Ojs.set_prop_ascii class_obj "baseVal" js_empty_string;
+    true
+  ) else false
 
 type env =
   {
