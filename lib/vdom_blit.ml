@@ -590,13 +590,6 @@ let sync_props to_string same set clear l1 l2 =
   in
   loop l1 l2
 
-let rec choose f = function
-  | [] -> []
-  | hd :: tl ->
-      match f hd with
-      | None -> choose f tl
-      | Some x -> x :: choose f tl
-
 let js_zero = Ojs.int_to_js 0
 let js_false = Ojs.bool_to_js false
 
@@ -605,7 +598,17 @@ let has_own_property o x =
   bool_of_js (call o "hasOwnProperty" [| string_to_js x |])
 
 let sync_attributes ctx ns dom a1 a2 =
-  let props = function Property (k, v) -> Some (k, v) | _ -> None in
+  (* extract props, styles and attrs from [a1] and [a2] in one go: *)
+  let extract_attrs a =
+    List.fold_left (fun (props, styles, attrs as prev) -> function
+      | Property (k, v) -> (k, v) :: props, styles, attrs
+      | Style (k, v) -> props, (k, String v) :: styles, attrs
+      | Attribute (k, v) -> props, styles, (k, v) :: attrs
+      | _ -> prev
+    ) ([], [], []) a in
+  let props1, styles1, attrs1 = extract_attrs a1
+  and props2, styles2, attrs2 = extract_attrs a2
+  in
   let set k v =
     match k, v with
     | "value", String s ->
@@ -638,28 +641,26 @@ let sync_attributes ctx ns dom a1 a2 =
     string_of_prop
     same_prop
     set clear
-    (choose props a1)
-    (choose props a2);
+    props1
+    props2;
 
-  let styles = function Style (k, v) -> Some (k, String v) | _ -> None in
-  let set k v = set_style dom k (eval_prop v)in
+  let set k v = set_style dom k (eval_prop v) in
   let clear k _ = set_style dom k js_empty_string in
   sync_props
     string_of_prop
     same_prop
     set clear
-    (choose styles a1)
-    (choose styles a2);
+    styles1
+    styles2;
 
-  let attrs = function Attribute (k, v) -> Some (k, v) | _ -> None in
   let set k v = Element.set_attribute dom k v in
   let clear k _ = Element.remove_attribute dom k in
   sync_props
     Fun.id
     (fun (s1: string) s2 -> s1 = s2)
     set clear
-    (choose attrs a1)
-    (choose attrs a2);
+    attrs1
+    attrs2;
 
   List.iter
     (function | Handler Decoder {event_type; _} -> ctx.add_listener event_type
@@ -1024,7 +1025,8 @@ let run (type msg model) ?(env = empty) ?container
         pending_redraw := false;
         let x = sync ctx container Element.null root (view !model) in
         current := Some x;
-        flush ()
+        flush ();
+        Gc.major ()
   in
 
   let rec process msg =
