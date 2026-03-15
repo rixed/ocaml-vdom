@@ -397,14 +397,15 @@ let custom_attribute prop =
            match v with
            | String "if-visible" -> if is_visible dom then Element.focus dom
            | String "prevent-scroll" -> Element.focus_options dom {prevent_scroll = true}
+           | Bool false -> ()  (* "no" means "no" *)
            | _ -> Element.focus dom
         )
 
   | "select" ->
-      Some (fun dom _ -> Element.select dom)
+      Some (fun dom v -> if v <> Bool false then Element.select dom)
 
   | "autosubmit" ->
-      Some (fun dom _ -> Element.submit dom)
+      Some (fun dom v -> if v <> Bool false then Element.submit dom)
 
   | _ -> None
 
