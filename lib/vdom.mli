@@ -341,6 +341,7 @@ val elt: ?ns:string -> string -> ('msg, 'msg vdom list -> 'msg vdom) elt_gen
 (** A generic element. *)
 
 val svg_ns : string
+val xhtml_ns : string
 
 val svg_elt: string -> ('msg, 'msg vdom list -> 'msg vdom) elt_gen
 (** A generic element in the SVG namespace. *)

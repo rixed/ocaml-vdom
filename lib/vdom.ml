@@ -363,6 +363,7 @@ let elt ?(ns = "") tag ?key ?(a = []) l =
     }
 
 let svg_ns = "http://www.w3.org/2000/svg"
+let xhtml_ns = "http://www.w3.org/1999/xhtml"
 let svg_elt tag ?key ?a l = elt ~ns:svg_ns tag ?key ?a l
 
 let div ?key ?a l = elt "div" ?key ?a l
