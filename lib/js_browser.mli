@@ -1199,3 +1199,6 @@ module Navigator: sig
     val get: get_options -> Ojs.t (* Credential *) Promise.t [@@js.global "navigator.credentials.get"]
   end
 end
+
+val encode_uri: string -> string [@@js.global "encodeURI"]
+val encode_uri_component: string -> string [@@js.global "encodeURIComponent"]
